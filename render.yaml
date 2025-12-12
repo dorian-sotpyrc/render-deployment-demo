@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: render-deployment-demo
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: |
+      pip install -r requirements.txt
+      git clone https://github.com/dorian-sotpyrc/create-an-interactive-data-dashboard-with-python.git dashboard_app
+      pip install -r dashboard_app/requirements.txt
+    startCommand: "gunicorn 'dashboard_app.app:create_app()'"
+    autoDeploy: true
