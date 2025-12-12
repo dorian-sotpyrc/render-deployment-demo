@@ -1,100 +1,98 @@
+
 # render-deployment-demo
 
-A tiny Render deployment wrapper that runs the PLEX marketing dashboard app from:
+A tiny Render deployment wrapper that runs the PLEX interactive dashboard from:
 
 - https://github.com/dorian-sotpyrc/create-an-interactive-data-dashboard-with-python
 
-Instead of duplicating code, this repo:
+Instead of duplicating code, this repo deploys a **small wrapper Flask entrypoint** that:
 
-1. Clones the dashboard repo during the Render build.
-2. Installs its dependencies.
-3. Serves it with `gunicorn` on the Render free tier.
+1. Clones the dashboard repo at runtime (if not present)
+2. Installs the dashboard’s dependencies
+3. Imports the dashboard’s `create_app()` safely (no module name collisions)
+4. Serves it on Render using Gunicorn
 
-It is essentially a *linking clone* used to automate deployment.
+It’s essentially a *linking clone* used to automate deployment.
 
 ---
 
 ## How it works
 
-On Render, the service defined in `render.yaml` does the following:
+Render runs this repo’s start command:
 
-1. Install this repo’s minimal dependency:
-
-   ```bash
-   pip install -r requirements.txt
+```bash
+gunicorn app:app --bind 0.0.0.0:$PORT
 ````
 
-2. Clone the dashboard project into a subfolder:
+That imports `app.py` in this repo (the wrapper). The wrapper then:
 
-   ```bash
-   git clone https://github.com/dorian-sotpyrc/create-an-interactive-data-dashboard-with-python.git dashboard_app
-   ```
+1. Clones the dashboard repo into a subfolder:
 
-3. Install the dashboard’s own dependencies:
+```bash
+create-an-interactive-data-dashboard-with-python/
+```
 
-   ```bash
-   pip install -r dashboard_app/requirements.txt
-   ```
+2. Installs the dashboard’s dependencies from its `requirements.txt`.
 
-4. Start the app with `gunicorn`, pointing at the dashboard’s app factory:
+3. Loads the dashboard’s Flask factory from:
 
-   ```bash
-   gunicorn 'dashboard_app.app:create_app()'
-   ```
+```text
+create-an-interactive-data-dashboard-with-python/app/__init__.py
+```
 
-The result: your Render service runs the full interactive data dashboard, even though this repo only contains a couple of config files.
+4. Exposes a WSGI app called `app` (so Gunicorn can serve it).
 
 ---
 
 ## Local development (optional)
 
-If you want to reproduce the Render setup locally:
+You can reproduce the Render-style startup locally:
 
 ```bash
-# Clone this wrapper repo
 git clone https://github.com/dorian-sotpyrc/render-deployment-demo.git
 cd render-deployment-demo
 
-# Install minimal dependency for this wrapper
+python3 -m venv .venv
+source .venv/bin/activate
+
 pip install -r requirements.txt
 
-# Clone the dashboard app into a subfolder
-git clone https://github.com/dorian-sotpyrc/create-an-interactive-data-dashboard-with-python.git dashboard_app
-
-# Install the dashboard's dependencies
-pip install -r dashboard_app/requirements.txt
-
-# Run with gunicorn the same way Render does
-gunicorn 'dashboard_app.app:create_app()'
+# Run the wrapper (it will clone + install the dashboard on first run)
+PORT=8000 gunicorn app:app --bind 0.0.0.0:8000
 ```
 
-Then open:
+Open:
 
-* Home/dashboard: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-
-(Adjust the host/port flags if you want a different binding.)
-
-You can also work directly in the dashboard repo itself for day-to-day development:
-
-```bash
-cd dashboard_app
-python app.py
-```
+* [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 
 ---
 
 ## Deploying on Render
 
-1. Push this repo to GitHub (already done for `dorian-sotpyrc/render-deployment-demo`).
-2. In Render:
+1. In Render, click **New +** → **Web Service** (or **Blueprint** if you prefer).
+2. Connect this repo:
 
-   * Click **New +** → **Blueprint**.
-   * Point Render at `https://github.com/dorian-sotpyrc/render-deployment-demo.git`.
-3. Render will detect `render.yaml` and create a web service using that configuration.
-4. Wait for the deploy to go **Live**, then open the generated URL – you’ll be looking at the interactive data dashboard app.
+   * `dorian-sotpyrc/render-deployment-demo`
+3. Use these settings:
 
-Any time you push updates to the dashboard repo, you can:
+**Build Command**
 
-* Trigger a redeploy of this service in Render (it will pull the latest dashboard code next build), or
-* Pin to a specific branch/commit by editing the `git clone` line in `render.yaml`.
+```bash
+pip install -r requirements.txt
+```
+
+**Start Command**
+
+```bash
+gunicorn app:app --bind 0.0.0.0:$PORT
+```
+
+4. Deploy and open the generated `*.onrender.com` URL.
+
+---
+
+## Notes / gotchas
+
+* If you update the dashboard repo, redeploy this Render service to pull the latest code.
+* This wrapper avoids circular-import issues by importing the dashboard package under a different module name internally.
 
